@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fibonacci Comparison: Pyodide vs GMP-Wasm</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .container { display: flex; gap: 20px; margin-top: 20px; }
+    .column { flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 15px; background: #f9f9f9; }
+    h2 { margin-top: 0; }
+    .output-box { white-space: pre-wrap; background: #fff; padding: 10px; border: 1px solid #ccc; min-height: 100px; margin-top: 10px; }
+    .status { font-style: italic; color: #666; margin-top: 5px; }
+    input, button { font-size: 16px; padding: 8px; margin-right: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Fibonacci Performance Test</h1>
+  <label>Fibonacci Index (N): <input id="fibInput" type="number" value="10" min="0"></label>
+  <button id="runAllButton" disabled>Loading...</button>
+  <div class="status" id="globalStatus">Initializing...</div>
+
+  <div class="container">
+    <div class="column">
+      <h2>Pyodide (Python + gmpy2)</h2>
+      <div class="status" id="pyodideStatus"></div>
+      <div class="output-box" id="pyodideOutput"></div>
+    </div>
+    <div class="column">
+      <h2>GMP-Wasm</h2>
+      <div class="status" id="gmpStatus"></div>
+      <div class="output-box" id="gmpOutput"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gmp-wasm/dist/mini.umd.min.js"></script>
+  <script>
+    let pyodide;
+    let gmpBinding, gmpModule;
+
+    const fibInput = document.getElementById("fibInput");
+    const runAllButton = document.getElementById("runAllButton");
+    const globalStatus = document.getElementById("globalStatus");
+    const pyodideStatus = document.getElementById("pyodideStatus");
+    const pyodideOutput = document.getElementById("pyodideOutput");
+    const gmpStatus = document.getElementById("gmpStatus");
+    const gmpOutput = document.getElementById("gmpOutput");
+
+    async function initPyodide() {
+      pyodideStatus.textContent = "Loading Pyodide...";
+      pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/" });
+      await pyodide.loadPackage("gmpy2");
+      pyodideStatus.textContent = "Pyodide ready!";
+    }
+
+    async function initGMP() {
+      gmpStatus.textContent = "Initializing GMP...";
+      const { binding, module } = await gmp.init();
+      gmpBinding = binding;
+      gmpModule = module;
+      gmpStatus.textContent = "GMP-Wasm ready!";
+    }
+
+    async function runPyodideFib(n) {
+      pyodideStatus.textContent = "Running Python...";
+      pyodideOutput.textContent = "Running...";
+      const code = `
+import gmpy2
+fib = gmpy2.fib(${n})
+str(fib)
+      `;
+      try {
+        const start = performance.now();
+        const result = await pyodide.runPythonAsync(code);
+        const duration = (performance.now() - start) / 1000;
+        pyodideOutput.textContent = `Result: ${result.slice(0, 50)}...\nDigits: ${result.length}\nTime taken: ${duration.toFixed(6)} s`;
+        pyodideStatus.textContent = "Done.";
+      } catch (err) {
+        pyodideOutput.textContent = `Error: ${err}`;
+        pyodideStatus.textContent = "Error.";
+      }
+    }
+
+    async function runGmpFib(n) {
+      gmpStatus.textContent = "Running GMP...";
+      gmpOutput.textContent = "Running...";
+      const start = performance.now();
+
+      try {
+        const { calculate, getContext } = await gmp.init();
+        calculate((g) => {
+          const ctx = getContext();
+          const num = ctx.Integer(1);
+          gmpBinding.mpz_fib_ui(num.mpz_t, n);
+          const resultStr = num.toString();
+          const duration = (performance.now() - start) / 1000;
+          gmpOutput.textContent = `Result: ${resultStr.slice(0, 50)}...\nDigits: ${resultStr.length}\nTime taken: ${duration.toFixed(6)} s`;
+          gmpStatus.textContent = "Done.";
+        });
+      } catch (err) {
+        gmpOutput.textContent = `Error: ${err}`;
+        gmpStatus.textContent = "Error.";
+      }
+    }
+
+    runAllButton.onclick = async () => {
+      const n = parseInt(fibInput.value);
+      if (isNaN(n) || n < 0) return alert("Invalid number");
+      globalStatus.textContent = `Running F(${n})...`;
+      await runPyodideFib(n);
+      await runGmpFib(n);
+      globalStatus.textContent = `Done with F(${n})!`;
+    };
+
+    (async function initialize() {
+      await Promise.all([initPyodide(), initGMP()]);
+      globalStatus.textContent = "Ready.";
+      runAllButton.disabled = false;
+      runAllButton.textContent = "Run Comparison";
+    })();
+  </script>
+</body>
+</html>
