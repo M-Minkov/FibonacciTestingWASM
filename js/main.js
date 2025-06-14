@@ -50,13 +50,16 @@ def _fib(n):
 str(fibonacci(${n}))
     `;
     try {
+        if(n >= 100000) {
+            throw new Error("Input too large for pure Python implementation");
+        }
     const start = performance.now();
     const result = await pyodide.runPythonAsync(code);
     const duration = (performance.now() - start) / 1000;
     purePythonOutput.textContent = `Result: ${result.slice(0, 50)}...\nDigits: ${result.length}\nTime taken: ${duration.toFixed(6)} s`;
     purePythonStatus.textContent = "Done.";
     } catch (err) {
-    purePythonOutput.textContent = `Error: ${err}`;
+    purePythonOutput.textContent = `${err}`;
     purePythonStatus.textContent = "Error.";
     }
 }
