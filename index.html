@@ -1,48 +1,179 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Fibonacci Comparison: Pyodide vs GMP-Wasm</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fibonacci in the Browser</title>
+  <meta name="description" content="Eight ways to compute huge Fibonacci numbers, from a simple loop to GMP compiled to WebAssembly, racing side by side in Web Workers. Entirely client-side.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' text-anchor='middle' fill='white'%3E%CF%86%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <h1>Fibonacci Performance Test</h1>
-  <label>Fibonacci Index (N): <input id="fibInput" type="number" value="10" min="0"></label>
-  <button id="runAllButton" disabled>Loading...</button>
-  <div class="status" id="globalStatus">Initializing...</div>
-
-  <div class="container">
-
-    <div class="column">
-      <h2>Basic JavaScript using Fast Doubling Method</h2>
-      <h3>https://www.nayuki.io/page/fast-fibonacci-algorithms</h3>
-      <div class="status" id="jsStatus"></div>
-      <div class="output-box" id="jsOutput"></div>
-    </div>
-
-    <div class="column">
-      <h2>Pyodide (Pure Python Implementation using Fast Doubling Method WASM)</h2>
-      <div class="status" id="purePythonStatus"></div>
-      <div class="output-box" id="purePythonOutput"></div>
-    </div>
-
-    <div class="column">
-      <h2>Pyodide (Python + gmpy2) WASM</h2>
-      <div class="status" id="pyodideStatus"></div>
-      <div class="output-box" id="pyodideOutput"></div>
-    </div>
-
-    <div class="column">
-      <h2>GMP-Wasm</h2>
-      <div class="status" id="gmpStatus"></div>
-      <div class="output-box" id="gmpOutput"></div>
-    </div>
-
+  <div id="danger-banner" class="danger-banner" hidden>
+    ⚠ Dangerous mode is on: time and memory limits are disabled. <button type="button" id="danger-off">Turn off</button>
   </div>
 
-  <script src="js/pyodide.js"></script>
-  <script src="js/mini.umd.min.js"></script>
-  <script src="js/main.js"></script>
+  <header class="wrap hero">
+    <p class="eyebrow">WebAssembly · Big integers · Web Workers</p>
+    <h1>Computing F(n) in your browser, eight different ways</h1>
+    <p class="lede">Pick an <var>n</var> and race eight Fibonacci implementations side by side: from a plain loop,
+      through textbook O(log n) algorithms, to Python and the GMP math library compiled to WebAssembly. Every method
+      runs in its own background thread, so the page stays smooth even when a run takes minutes. Nothing is sent to a server.</p>
+    <p class="links"><a href="https://github.com/M-Minkov/FibonacciTestingWASM">Source on GitHub</a>
+      <a href="#chart">Benchmark chart</a> <a href="#ideas">How it works</a></p>
+  </header>
+
+  <main class="wrap">
+    <section class="panel controls" aria-label="Run a comparison">
+      <div class="field grow">
+        <label for="n">Compute F(n) for n =</label>
+        <input id="n" value="1,000,000" inputmode="numeric" autocomplete="off" spellcheck="false" aria-describedby="n-info">
+        <div class="presets" role="group" aria-label="Presets">
+          <button type="button" data-n="1000">1,000</button>
+          <button type="button" data-n="100000">100K</button>
+          <button type="button" data-n="1000000">1M</button>
+          <button type="button" data-n="10000000">10M</button>
+          <button type="button" data-n="100000000">100M</button>
+          <button type="button" data-n="1000000000">1B</button>
+        </div>
+        <p id="n-info" class="hint"></p>
+      </div>
+      <div class="field">
+        <label for="concurrency">Methods running at once: <output id="concurrency-out" for="concurrency">3</output></label>
+        <input id="concurrency" type="range" min="1" max="8" value="3">
+        <p class="hint" id="cores-hint">Each one gets its own CPU core. Running more than you have cores slows them all down.</p>
+      </div>
+      <div class="field actions">
+        <button type="button" id="run" class="primary">Run comparison</button>
+        <p id="run-status" class="hint" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="methods" class="grid" aria-label="Methods"></section>
+
+    <section id="chart" class="panel">
+      <h2>Expected running time</h2>
+      <p>Measured compute time for each method against <var>n</var> (dots), joined by lines and extended past the
+        last measurement (dashed). Both axes are logarithmic, so every gridline is 10× the one before. A slope of 1 means
+        “twice the input, twice the time”; the iterative loop climbs at slope 2 because it is quadratic. Runs predicted to
+        cross the 2-minute line are skipped. Your own runs appear as rings, and estimates adapt to your device as you run.
+        Hover to read values; click to use that <var>n</var>.</p>
+      <div class="chart-wrap" id="chart-box"></div>
+      <ul class="legend" id="legend"></ul>
+      <p class="hint" id="bench-meta"></p>
+    </section>
+
+    <section id="ideas">
+      <h2>How it works</h2>
+      <div class="ideas">
+        <article>
+          <h3>What is WebAssembly (WASM)?</h3>
+          <p>A compact binary instruction format that every modern browser runs at close to native speed, inside the
+            same sandbox as JavaScript. Code written in C, C++ or Rust can be compiled to it once and run on any device.
+            Two large C projects run here as WebAssembly: the CPython interpreter (via Pyodide) and the GMP math library
+            (via gmp-wasm, and again inside Pyodide).</p>
+        </article>
+        <article>
+          <h3>What is GMP? And MPFR?</h3>
+          <p>The GNU Multiple Precision Arithmetic Library is the standard C library for arbitrarily large numbers,
+            tuned over three decades and relied on by compilers such as GCC and by computer algebra systems. It switches
+            multiplication algorithm as numbers grow: schoolbook, Karatsuba, several Toom-Cook variants, then FFT.
+            MPFR is built on GMP and adds big floating-point numbers with correctly rounded results.</p>
+        </article>
+        <article>
+          <h3>What are Pyodide and gmpy2?</h3>
+          <p>Pyodide is CPython, the standard Python interpreter, compiled to WebAssembly so real Python runs in the
+            browser. gmpy2 is a Python library that wraps GMP and MPFR. The pure-Python card measures Python’s own
+            <code>int</code>; the gmpy2 card measures GMP with a thin layer of Python on top.</p>
+        </article>
+        <article>
+          <h3>What is a BigInt?</h3>
+          <p>JavaScript’s built-in integer of unlimited size, written with an <code>n</code> suffix
+            (<code>123n</code>). In Chrome and Edge, multiplying huge BigInts moves from schoolbook to Karatsuba,
+            Toom-Cook and FFT-based algorithms as numbers grow, which is why plain JavaScript keeps up surprisingly well.
+            Other browsers implement BigInt differently, so their results (and size limits) vary.</p>
+        </article>
+        <article>
+          <h3>What is a Web Worker?</h3>
+          <p>A background thread for JavaScript. A page’s own JavaScript shares one thread with scrolling and clicks,
+            so a long calculation there freezes everything. Here each method lives in its own worker: the page stays
+            responsive, several methods use separate CPU cores at once, and Cancel simply terminates the worker.</p>
+        </article>
+        <article>
+          <h3>What is fast doubling?</h3>
+          <p>Two identities, F(2k) = F(k)·(2F(k+1) − F(k)) and F(2k+1) = F(k)² + F(k+1)², jump from position
+            <var>k</var> straight to 2<var>k</var> or 2<var>k</var>+1. Reading the bits of <var>n</var> from the top, each
+            bit doubles the position and adds one if the bit is set, so F(1,000,000) takes 20 steps instead of a million
+            additions. The matrix method walks the same bits but does more than twice the multiplications per step.</p>
+        </article>
+        <article class="wide">
+          <h3>Three fast doublings, three very different speeds</h3>
+          <p>The JavaScript, pure-Python and GMP cards run essentially the same algorithm, about 20 steps for
+            n = 1,000,000. What differs is the big-number library underneath, and above all how it multiplies.
+            CPython’s <code>int</code> only implements Karatsuba (roughly n<sup>1.58</sup>). V8’s BigInt adds Toom-Cook
+            and FFT multiplication. GMP has tuned code for every size range, and its Fibonacci routine is built from
+            squarings, which are cheaper than general multiplications.</p>
+          <p>gmpy2 and mpz_fib_ui call the very same GMP function, yet gmp-wasm is much faster. The algorithm isn’t the
+            difference; the build is. gmp-wasm compiles GMP with 64-bit limbs (the “digits” GMP works in), compiler
+            optimizations, and size thresholds tuned by GMP’s own <code>tuneup</code> program running in WebAssembly.
+            Pyodide’s recipe uses the default 32-bit limbs, untuned thresholds, and passes only
+            <code>CFLAGS="-fPIC"</code>, which replaces GMP’s usual optimization flags. Both builds also have to skip
+            GMP’s hand-written assembly, which WebAssembly can’t use, so native GMP would be faster still.</p>
+        </article>
+        <article>
+          <h3>Why log₂ n steps is not log₂ n time</h3>
+          <p>The numbers double in size at every step, so the last step alone costs about as much as all the earlier
+            ones combined. The total comes to a small constant times M(n), the cost of one big multiplication. That is
+            why the multiplication algorithm decides the race. Binet’s formula with MPFR is the exception: it works at
+            full precision from the start, so every one of its multiplications is full-size.</p>
+        </article>
+        <article>
+          <h3>Printing is the slow part</h3>
+          <p>F(100,000,000) has almost 21 million digits. Converting a binary number to decimal takes GMP several times
+            longer than computing it, and since 2022 Python refuses by default to print integers over 4,300 digits,
+            because its conversion used to be quadratic and could be abused to stall servers. So each worker gets the digit count and the first and last 30 digits from
+            one power of ten and one division instead. Results are cross-checked on those digits: methods that agree get a ✓.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="danger" class="panel danger">
+      <h2>Dangerous mode</h2>
+      <label class="switch">
+        <input type="checkbox" id="dangerous" role="switch">
+        <span>Enable dangerous mode</span>
+      </label>
+      <p class="warning"><strong>Warning:</strong> normally, any method expected to take more than 2 minutes or about
+        1.5 GB of memory is skipped. Dangerous mode runs it anyway. That can take hours, use many gigabytes of RAM,
+        freeze or crash this tab or the whole browser, and slow down everything else on your computer. Cancel stops a
+        run immediately, unless the browser runs out of memory first.</p>
+    </section>
+
+    <section id="sources">
+      <h2>Sources and further reading</h2>
+      <ol class="sources">
+        <li><a href="https://www.nayuki.io/page/fast-fibonacci-algorithms">Project Nayuki: Fast Fibonacci algorithms</a>, fast doubling and matrix derivations.</li>
+        <li><a href="https://gmplib.org/manual/Fibonacci-Numbers-Algorithm">GMP manual: Fibonacci numbers algorithm</a>, how <code>mpz_fib_ui</code> works.</li>
+        <li><a href="https://gmplib.org/manual/Multiplication-Algorithms">GMP manual: Multiplication algorithms</a>, Karatsuba, Toom-Cook and FFT.</li>
+        <li><a href="https://github.com/Daninet/gmp-wasm">gmp-wasm</a> by Dani Biró, GMP and MPFR compiled to WebAssembly (<a href="https://github.com/Daninet/gmp-wasm/blob/master/binding/gmp/Dockerfile">build configuration</a>).</li>
+        <li><a href="https://pyodide.org/">Pyodide</a>, CPython for WebAssembly (<a href="https://github.com/pyodide/pyodide-recipes/blob/main/packages/libgmp/meta.yaml">GMP build recipe</a>).</li>
+        <li><a href="https://gmpy2.readthedocs.io/">gmpy2 documentation</a>, Python bindings for GMP, MPFR and MPC.</li>
+        <li><a href="https://www.mpfr.org/">MPFR</a>, multiple-precision floating point with correct rounding.</li>
+        <li><a href="https://github.com/v8/v8/tree/main/src/bigint">V8 BigInt source</a>, including its Karatsuba, Toom-Cook and FFT multiplication.</li>
+        <li><a href="https://github.com/python/cpython/blob/main/Objects/longobject.c">CPython <code>longobject.c</code></a>, Python’s integer type and its Karatsuba multiplication.</li>
+        <li><a href="https://docs.python.org/3/library/stdtypes.html#int-max-str-digits">Python docs: integer string conversion length limit</a>.</li>
+        <li><a href="https://en.wikipedia.org/wiki/Fibonacci_sequence#Closed-form_expression">Wikipedia: Fibonacci sequence, closed-form expression</a> (Binet’s formula).</li>
+        <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API">MDN: Web Workers API</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt">BigInt</a>.</li>
+        <li><a href="https://webassembly.org/">WebAssembly.org</a>, the WebAssembly specification and overview.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <p>Built by <a href="https://github.com/M-Minkov">M-Minkov</a>. A static site: no build step, no tracking.
+      Benchmarks can be regenerated on your own machine with <a href="bench.html">the benchmark runner</a>.</p>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
