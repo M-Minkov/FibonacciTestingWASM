@@ -57,7 +57,8 @@ METHODS.forEach(m => { m.color = `var(--s${SLOTS[m.id]})`; });
 
 // Log-log interpolation between benchmark points. Beyond the last point, extend the slope of
 // the last segment plus a small safety margin (big-number code tends to get relatively slower
-// as it outgrows CPU caches), and never flatter than linear, since the answer itself grows linearly.
+// as it outgrows CPU caches), never flatter than linear, since the answer itself grows linearly,
+// and never steeper than quadratic, since no method here is worse than O(n²).
 export function interpolate(points, n) {
   if (!points?.length) return null;
   const L = Math.log;
@@ -67,7 +68,7 @@ export function interpolate(points, n) {
     if (n <= n2) return Math.exp(L(t1) + (L(t2) - L(t1)) * (L(n) - L(n1)) / (L(n2) - L(n1)));
   }
   const [n2, t2] = points.at(-1), [n1, t1] = points.at(-2) ?? [n2 / 10, t2];
-  const slope = Math.max(1, (L(t2) - L(t1)) / (L(n2) - L(n1))) + 0.1;
+  const slope = Math.min(2, Math.max(1, (L(t2) - L(t1)) / (L(n2) - L(n1)))) + 0.1;
   return t2 * (n / n2) ** slope;
 }
 

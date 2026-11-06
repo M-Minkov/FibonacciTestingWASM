@@ -53,7 +53,6 @@ function limitReason(e) {
 
 let n = parseN(ui.n.value), runN = n;
 let dangerous = false, running = false, queue = [], active = 0, onIdle = null, ticker = 0;
-const runs = []; // { m, n, ms } points for the chart
 
 /* ---------- Method cards ---------- */
 
@@ -62,7 +61,7 @@ const cards = METHODS.map(m => {
   el.className = 'card';
   el.style.setProperty('--c', m.color);
   el.innerHTML = `
-    <header><span class="dot"></span><div><h3></h3><p class="runtime"></p></div></header>
+    <header><span class="dot"></span><div><h3></h3><p class="runtime"></p></div><span class="badge">Fastest</span></header>
     <p class="cost"></p>
     <div class="out">
       <p class="headline"></p>
@@ -131,8 +130,8 @@ function render(c) {
       break;
     }
     case 'skipped':
-      headline = 'Not run';
-      detail = `${c.reason} Dangerous mode (bottom of the page) runs it anyway.`;
+      headline = c.overflow ? 'Overflows' : 'Not run';
+      detail = c.overflow ? c.reason : `${c.reason} Dangerous mode (bottom of the page) runs it anyway.`;
       break;
     case 'error':
       headline = 'Failed';
@@ -167,6 +166,18 @@ function verify() {
     c.check = done.length < 2 ? '' : k === best && k > 1 ? `✓ matches ${k - 1} other${k > 2 ? 's' : ''}` : '✗ differs';
     render(c);
   }
+  markFastest();
+}
+
+// Badge the fastest exact method: by measured time once results are in, by estimate before.
+function markFastest() {
+  const done = cards.filter(c => c.state === 'done' && c.check[0] !== '✗');
+  const k = done.length ? runN : n;
+  const best = (done.length ? done.map(c => [c, c.result.computeMs])
+    : cards.filter(c => c.state === 'idle').map(c => [c, estimate(c.m, n).compute]))
+    .filter(([c]) => !(k > c.m.exactUpTo))
+    .sort((a, b) => a[1] - b[1])[0]?.[0];
+  for (const c of cards) c.el.classList.toggle('best', c === best);
 }
 
 /* ---------- Running ---------- */
@@ -177,12 +188,14 @@ async function runAll() {
   running = true;
   queue = [];
   for (const c of cards) {
-    Object.assign(c, { result: null, check: '', computedMs: null });
+    Object.assign(c, { result: null, check: '', computedMs: null, overflow: runN >= c.m.overflowAt });
     const e = estimate(c.m, runN), reason = limitReason(e);
-    if (reason && !dangerous) Object.assign(c, { state: 'skipped', reason });
+    if (c.overflow) Object.assign(c, { state: 'skipped', reason: 'φⁿ is too big for a float64.' });
+    else if (reason && !dangerous) Object.assign(c, { state: 'skipped', reason });
     else { Object.assign(c, { state: 'queued', expected: Math.max(e.total, 1), expectedCompute: e.compute }); queue.push(c); }
     render(c);
   }
+  markFastest();
   queue.sort((a, b) => a.expected - b.expected); // quickest first, so results start appearing at once
   updateButton();
   ticker = setInterval(tick, 200);
@@ -210,8 +223,6 @@ async function start(c) {
     r.reps = reps;
     learn(c.m, runN, r.computeMs + r.summaryMs);
     Object.assign(c, { state: 'done', result: r });
-    runs.push({ m: c.m, n: runN, ms: r.computeMs });
-    drawChart();
     verify();
   } catch (e) {
     if (e.message === 'Cancelled') c.state = 'cancelled';
@@ -255,8 +266,7 @@ function setN(value) {
   ui.info.textContent = ok ? '' : `Enter a whole number from 0 to ${int(MAX_N)} (1e6 or 2.5M work too).`;
   ui.n.title = ok ? `F(${int(n)}) has ${int(digitsOf(n))} digit${n < 7 ? '' : 's'}` : '';
   updateButton();
-  if (!running && ok) cards.forEach(c => { c.state = 'idle'; render(c); });
-  drawChart();
+  if (!running && ok) { cards.forEach(c => { c.state = 'idle'; render(c); }); markFastest(); }
 }
 
 ui.n.addEventListener('input', () => setN(parseN(ui.n.value)));
@@ -273,74 +283,98 @@ function setDangerous(on) {
   dangerous = ui.danger.checked = on;
   $('#danger-banner').hidden = !on;
   for (const c of cards) if (c.state === 'idle' || c.state === 'skipped') { c.state = 'idle'; render(c); }
+  if (!running) markFastest();
 }
 ui.danger.addEventListener('change', () => setDangerous(ui.danger.checked));
 $('#danger-off').addEventListener('click', () => setDangerous(false));
 
 /* ---------- Chart ---------- */
+// A fixed reference: the benchmark data, continued past the last measurement along its trend.
 
 const box = $('#chart-box');
 const tooltip = Object.assign(document.createElement('div'), { className: 'tooltip', hidden: true });
-const X0 = 1, X1 = Math.log10(MAX_N), Y0 = -5, Y1 = 7; // log10 ranges: n, and time in ms
-const Y_LABELS = ['10 ns', '0.1 µs', '1 µs', '10 µs', '100 µs', '1 ms', '10 ms', '100 ms', '1 s', '10 s', '100 s', '17 min', '2.8 h'];
+const X0 = 1, X1 = Math.log10(MAX_N);
 const X_LABELS = ['10', '100', '1K', '10K', '100K', '1M', '10M', '100M', '1B'];
+const VIEWS = {
+  time: {
+    hint: 'Both axes are logarithmic. Hover to compare the methods at any n.',
+    y0: 1e-5, y1: 3.6e6,
+    ticks: [[1e-5, '10 ns'], [1e-4, '100 ns'], [1e-3, '1 µs'], [1e-2, '10 µs'], [0.1, '100 µs'], [1, '1 ms'], [10, '10 ms'],
+      [100, '100 ms'], [1e3, '1 s'], [1e4, '10 s'], [6e4, '1 min'], [6e5, '10 min'], [3.6e6, '1 h']],
+  },
+  relative: {
+    hint: 'How many times slower each method is than the fastest one at the same n. Lower is better.',
+    y0: 0.85, y1: 1e4,
+    ticks: [[1, '1×'], [2, '2×'], [5, '5×'], [10, '10×'], [20, '20×'], [50, '50×'], [100, '100×'], [1e3, '1,000×'], [1e4, '10,000×']],
+  },
+};
+let view = 'time', scale; // scale: current geometry, shared with the hover handler
+
 const label = m => `${m.name} · ${m.runtime.split(' · ')[0]}`;
-let scale; // current geometry, shared with the hover handler
+const drawn = (m, v) => !(v >= m.overflowAt);  // float64 Binet stops where φⁿ overflows
+const exact = (m, v) => !(v > m.exactUpTo);    // …and is only exact up to F(70)
+const timeAt = (m, v) => interpolate(curves[m.id].compute, m.flat ? Math.min(v, curves[m.id].maxN) : v);
+// Comparisons use the methods that are exact at every n (float64 Binet is left out).
+const general = METHODS.filter(m => m.exactUpTo == null);
+const baseAt = v => Math.min(...general.map(m => timeAt(m, v)));
+const SAMPLES = Array.from({ length: 241 }, (_, i) => 10 ** (X0 + (X1 - X0) * i / 240));
+
+// The method that is fastest at the most input sizes gets the spotlight.
+const wins = new Map(METHODS.map(m => [m, 0]));
+for (const v of SAMPLES) {
+  const best = METHODS.filter(m => exact(m, v)).reduce((a, b) => (timeAt(b, v) < timeAt(a, v) ? b : a));
+  wins.set(best, wins.get(best) + 1);
+}
+const champion = [...wins].sort((a, b) => b[1] - a[1])[0][0];
 
 function drawChart() {
-  const W = Math.max(box.clientWidth, 300), H = Math.round(Math.min(Math.max(W * 0.55, 300), 460));
-  const pad = { l: W < 500 ? 48 : 58, r: 12, t: 10, b: 34 };
+  const V = VIEWS[view], ly0 = Math.log10(V.y0), ly1 = Math.log10(V.y1);
+  const W = Math.max(box.clientWidth, 300), H = Math.round(Math.min(Math.max(W * 0.58, 320), 500));
+  const pad = { l: W < 500 ? 52 : 62, r: 14, t: 10, b: 34 };
   const x = v => pad.l + (Math.log10(v) - X0) / (X1 - X0) * (W - pad.l - pad.r);
-  const y = ms => pad.t + (Y1 - Math.log10(ms)) / (Y1 - Y0) * (H - pad.t - pad.b);
-  scale = { W, H, pad, x, invX: px => 10 ** (X0 + (px - pad.l) / (W - pad.l - pad.r) * (X1 - X0)) };
+  const y = val => pad.t + (ly1 - Math.log10(val)) / (ly1 - ly0) * (H - pad.t - pad.b);
+  scale = { W, pad, invX: px => 10 ** (X0 + (px - pad.l) / (W - pad.l - pad.r) * (X1 - X0)) };
   const out = [];
   for (let e = 1; e <= 9; e++) {
     out.push(`<line x1="${x(10 ** e)}" x2="${x(10 ** e)}" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--grid)"/>`);
-    if (W >= 500 || e % 2) out.push(`<text x="${x(10 ** e)}" y="${H - pad.b + 18}" text-anchor="middle">${X_LABELS[e - 1]}</text>`);
+    if (W >= 500 || e % 2) out.push(`<text x="${x(10 ** e)}" y="${H - pad.b + 20}" text-anchor="middle">${X_LABELS[e - 1]}</text>`);
   }
-  for (let e = Y0; e <= Y1; e++) {
-    out.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(10 ** e)}" y2="${y(10 ** e)}" stroke="var(--grid)"/>`);
-    if (W >= 500 || e % 2 === 0) out.push(`<text x="${pad.l - 8}" y="${y(10 ** e) + 4}" text-anchor="end">${Y_LABELS[e - Y0]}</text>`);
+  V.ticks.forEach(([val, text], i) => {
+    out.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(val)}" y2="${y(val)}" stroke="var(--grid)"/>`);
+    if (W >= 500 || i % 2 === 0) out.push(`<text x="${pad.l - 8}" y="${y(val) + 4}" text-anchor="end">${text}</text>`);
+  });
+  if (view === 'time') {
+    const lim = y(TIME_LIMIT);
+    out.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${lim}" y2="${lim}" stroke="var(--danger)" stroke-dasharray="4 4"/>`,
+      `<text x="${pad.l + 6}" y="${lim - 6}" style="fill:var(--bad)">2 min: not run by default</text>`);
   }
-  const lim = y(TIME_LIMIT);
-  out.push(`<line x1="${pad.l}" x2="${W - pad.r}" y1="${lim}" y2="${lim}" stroke="var(--danger)"/>`,
-    `<text x="${pad.l + 6}" y="${lim - 6}" style="fill:var(--danger)">2 min limit</text>`,
-    `<clipPath id="plot"><rect x="${pad.l}" y="${pad.t}" width="${W - pad.l - pad.r}" height="${H - pad.t - pad.b}"/></clipPath>`,
-    '<g clip-path="url(#plot)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">');
-  for (const m of METHODS) {
-    const c = curves[m.id];
-    if (!c.compute.length) continue;
-    const pts = [];
-    for (let i = 0; i <= 160; i++) {
-      const v = 10 ** (X0 + (X1 - X0) * i / 160);
-      if (m.flat && v > c.maxN) break;
-      pts.push([v, interpolate(c.compute, v)]);
-    }
-    const path = list => 'M' + list.map(([v, ms]) => `${x(v).toFixed(1)},${y(ms).toFixed(1)}`).join('L');
-    const measured = pts.filter(p => p[0] <= c.maxN), beyond = pts.filter(p => p[0] >= c.maxN);
-    out.push(`<path d="${path(measured)}" stroke="${m.color}"/>`);
-    if (!m.flat && beyond.length) out.push(`<path d="${path([[c.maxN, interpolate(c.compute, c.maxN)], ...beyond])}" stroke="${m.color}" stroke-dasharray="2 5" opacity="0.8"/>`);
-    for (const [v, ms] of c.compute) out.push(`<circle cx="${x(v)}" cy="${y(ms)}" r="3.5" fill="${m.color}" stroke="var(--surface)" stroke-width="1.5"/>`);
+  out.push(`<clipPath id="plot"><rect x="${pad.l}" y="${pad.t}" width="${W - pad.l - pad.r}" height="${H - pad.t - pad.b}"/></clipPath>`,
+    '<g clip-path="url(#plot)" fill="none" stroke-linecap="round" stroke-linejoin="round">');
+  // Draw the champion last, so it sits on top.
+  for (const m of [...METHODS.filter(m => m !== champion), champion]) {
+    if (view === 'relative' && !general.includes(m)) continue;
+    const pts = SAMPLES.filter(v => drawn(m, v)).map(v => [v, view === 'time' ? timeAt(m, v) : timeAt(m, v) / baseAt(v)]);
+    if (pts.length < 2) continue;
+    const d = 'M' + pts.map(([v, val]) => `${x(v).toFixed(1)},${y(val).toFixed(1)}`).join('L');
+    out.push(`<path d="${d}" stroke="${m.color}" stroke-width="${m === champion ? 4 : 2}"/>`);
   }
-  for (const r of runs) out.push(`<circle cx="${x(Math.max(r.n, 10))}" cy="${y(Math.max(r.ms, 1e-5))}" r="6" stroke="${r.m.color}" stroke-width="2.5" fill="var(--surface)" fill-opacity="0.6"><title>Your run: ${esc(label(r.m))}, n = ${int(r.n)}, ${time(r.ms)}</title></circle>`);
-  out.push('</g>');
-  if (valid(n) && n >= 10) out.push(`<line x1="${x(n)}" x2="${x(n)}" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--ink-2)" stroke-opacity="0.7"/><text x="${x(n) + 5}" y="${pad.t + 12}">your n</text>`);
-  out.push(`<line id="cross" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--ink-2)" visibility="hidden"/>`);
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Log-log chart of compute time against n for each method; the data table below lists the same measurements.">${out.join('')}</svg>`;
+  out.push('</g>', `<line id="cross" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--ink-2)" visibility="hidden"/>`);
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Chart of compute time against n for each method, on logarithmic axes; the table below lists the measurements.">${out.join('')}</svg>`;
   box.append(tooltip);
+  $('#chart-hint').textContent = V.hint;
 }
 
 function hover(e) {
   const rect = box.getBoundingClientRect(), px = (e.clientX - rect.left) * scale.W / rect.width;
   if (px < scale.pad.l || px > scale.W - scale.pad.r) return leave();
-  const v = Math.round(scale.invX(px));
+  const v = Math.round(scale.invX(px)), best = baseAt(v);
   const cross = box.querySelector('#cross');
   cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
-  const rows = METHODS.filter(m => curves[m.id].compute.length && !(m.flat && v > 1474))
-    .map(m => [m, interpolate(curves[m.id].compute, v), !m.flat && v > curves[m.id].maxN])
-    .sort((a, b) => a[1] - b[1]);
-  tooltip.innerHTML = `<b>n = ${int(v)}</b>` + rows.map(([m, ms, ext]) =>
-    `<div><span class="key" style="--c:${m.color}"></span><span>${esc(label(m))}</span><span>${ext ? '~' : ''}${time(ms)}</span></div>`).join('');
+  const rows = METHODS.filter(m => drawn(m, v)).map(m => [m, timeAt(m, v)]).sort((a, b) => a[1] - b[1]);
+  tooltip.innerHTML = `<b>n = ${int(v)}</b>` + rows.map(([m, ms]) => {
+    const factor = !exact(m, v) ? 'inexact' : ms <= best ? 'fastest' : `${+(ms / best).toPrecision(2)}×`;
+    return `<div><span class="key" style="--c:${m.color}"></span><span>${esc(label(m))}</span><span>${time(ms)}</span><span class="factor">${factor}</span></div>`;
+  }).join('');
   tooltip.hidden = false;
   const left = e.clientX - rect.left, w = tooltip.offsetWidth;
   tooltip.style.left = `${left + 16 + w > rect.width ? left - w - 16 : left + 16}px`;
@@ -352,26 +386,30 @@ function leave() {
 }
 box.addEventListener('pointermove', hover);
 box.addEventListener('pointerleave', leave);
-box.addEventListener('click', e => {
-  const rect = box.getBoundingClientRect(), px = (e.clientX - rect.left) * scale.W / rect.width;
-  if (px < scale.pad.l || running) return;
-  const v = Number(scale.invX(px).toPrecision(2));
-  ui.n.value = int(v);
-  setN(v);
-});
 new ResizeObserver(() => drawChart()).observe(box);
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  view = b.dataset.view;
+  document.querySelectorAll('.seg button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  drawChart();
+}));
 
-// Legend, data table and benchmark details
-$('#legend').innerHTML = METHODS.map(m => `<li><span class="key" style="--c:${m.color}"></span>${esc(label(m))}</li>`).join('');
+// Winner line, legend (fastest first, at n = 100M), data table and benchmark details
+const everywhere = wins.get(champion) === SAMPLES.length;
+$('#winner').innerHTML = `<span class="key" style="--c:${champion.color}"></span>
+  <span>Fastest ${everywhere ? 'at every input size' : 'overall'}: <b>${esc(label(champion))}</b></span>`;
+const at = (m, v) => (drawn(m, v) ? timeAt(m, v) : Infinity);
+const order = [...METHODS].sort((a, b) => at(a, 1e8) - at(b, 1e8));
+$('#legend').innerHTML = order.map(m => `<li${m === champion ? ' class="champion"' : ''}><span class="key" style="--c:${m.color}"></span>${esc(label(m))}</li>`).join('');
 const ns = [...new Set(Object.values(BENCH.results).flatMap(rows => rows.map(r => r[0])))].sort((a, b) => a - b);
-const table = `<details class="table"><summary>Show as a table</summary><div class="scroll"><table>
-  <thead><tr><th>n</th>${METHODS.map(m => `<th>${esc(label(m))}</th>`).join('')}</tr></thead>
-  <tbody>${ns.map(v => `<tr><th>${int(v)}</th>${METHODS.map(m => {
+const table = `<details class="table"><summary>Show the measurements</summary><div class="scroll"><table>
+  <thead><tr><th>n</th>${order.map(m => `<th>${esc(label(m))}</th>`).join('')}</tr></thead>
+  <tbody>${ns.map(v => `<tr><th>${int(v)}</th>${order.map(m => {
     const row = BENCH.results[m.id]?.find(r => r[0] === v);
     return `<td>${row ? time(row[1]) : ''}</td>`;
   }).join('')}</tr>`).join('')}</tbody></table></div></details>`;
-$('#bench-meta').innerHTML = `${esc(BENCH.device ?? 'Unknown device')}, ${esc(BENCH.date ?? '')}. Compute time only.
+$('#bench-meta').innerHTML = `Measured on ${esc(BENCH.device ?? 'an unknown device')}. Compute time only.
   <a href="bench.html">Benchmark your own machine</a>.`;
 $('#bench-meta').insertAdjacentHTML('afterend', table);
 
+drawChart();
 setN(n);

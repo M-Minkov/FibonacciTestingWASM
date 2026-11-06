@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0d0d0d">
   <title>Fibonacci in the Browser</title>
   <meta name="description" content="Different ways to compute huge Fibonacci numbers in the browser, and what WebAssembly adds: JavaScript, Python and GMP, side by side.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' text-anchor='middle' fill='white'%3E%CF%86%3C/text%3E%3C/svg%3E">
@@ -48,9 +50,15 @@
     <section id="methods" class="grid" aria-label="Methods"></section>
 
     <section id="chart" class="panel">
-      <h2>Expected running time</h2>
-      <p class="hint">Measured on a test machine; both axes are logarithmic. Dashed lines are extrapolated, and
-        anything above the red line is skipped. Hover for values, click to pick n.</p>
+      <div class="chart-head">
+        <h2>Expected running time</h2>
+        <div class="seg" role="group" aria-label="Chart view">
+          <button type="button" data-view="time" aria-pressed="true">Time</button>
+          <button type="button" data-view="relative" aria-pressed="false">Compared with the fastest</button>
+        </div>
+      </div>
+      <p class="winner" id="winner"></p>
+      <p class="hint" id="chart-hint"></p>
       <div class="chart-wrap" id="chart-box"></div>
       <ul class="legend" id="legend"></ul>
       <p class="hint" id="bench-meta"></p>
@@ -96,8 +104,8 @@
         </details>
         <details>
           <summary>Why are only the first and last digits shown?</summary>
-          <p>Converting a huge number to decimal can take longer than computing it. Each method reports the digit
-            count and its first and last digits, and those are compared to check that the methods agree.</p>
+          <p>The numbers are usually too big to show: F(1,000,000) alone has 208,988 digits. They are also stored in
+            binary, and converting them into readable decimal digits can take even longer than the calculation itself.</p>
         </details>
       </div>
     </section>

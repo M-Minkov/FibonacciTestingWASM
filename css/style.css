@@ -1,45 +1,24 @@
+/* Dark theme only */
 :root {
-  color-scheme: light;
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --sunken: #f0efec;
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --muted: #6f6e69;
-  --line: rgba(11, 11, 11, 0.1);
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --accent: #2a78d6;
-  --accent-ink: #1c5cab;
-  --good: #006300;
-  --bad: #c62f2f;
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --sunken: #232322;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #9a9890;
+  --line: rgba(255, 255, 255, 0.1);
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --accent: #3987e5;
+  --accent-ink: #86b6ef;
+  --good: #2fbf2f;
+  --bad: #ee7a7a;
   --danger: #d03b3b;
   /* categorical series, fixed order (one per method) */
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
-  --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --sunken: #232322;
-    --ink: #f0efec;
-    --ink-2: #c3c2b7;
-    --muted: #9a9890;
-    --line: rgba(255, 255, 255, 0.1);
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --accent: #3987e5;
-    --accent-ink: #86b6ef;
-    --good: #2fbf2f;
-    --bad: #ee7a7a;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
-    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
-    --shadow: none;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -64,7 +43,6 @@ button { font: inherit; cursor: pointer; }
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 20px;
-  box-shadow: var(--shadow);
 }
 .hint { color: var(--muted); font-size: 0.85rem; margin: 6px 0 0; }
 
@@ -119,10 +97,17 @@ input[type="range"] { accent-color: var(--accent); width: 100%; max-width: 320px
 .card {
   display: flex; flex-direction: column; gap: 10px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-  padding: 18px; box-shadow: var(--shadow);
+  padding: 18px;
   border-top: 3px solid var(--c);
 }
 .card header { display: flex; gap: 10px; align-items: baseline; }
+.badge {
+  display: none; margin-left: auto; flex: none; font-size: 0.75rem; font-weight: 650; letter-spacing: 0.02em;
+  padding: 2px 9px; border-radius: 999px; border: 1px solid var(--c);
+  background: color-mix(in srgb, var(--c) 22%, transparent); color: var(--ink);
+}
+.card.best { border-color: var(--c); box-shadow: 0 0 0 1px var(--c); }
+.card.best .badge { display: inline-block; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; transform: translateY(1px); }
 .runtime { color: var(--muted); font-size: 0.85rem; margin: 2px 0 0; }
 .desc { color: var(--ink-2); font-size: 0.9rem; margin: 8px 0 0; }
@@ -155,20 +140,30 @@ details pre {
 }
 
 /* Chart */
+.chart-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.chart-head h2 { margin: 0; }
+.seg { display: inline-flex; background: var(--sunken); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.seg button { border: 0; background: transparent; color: var(--ink-2); border-radius: 7px; padding: 5px 12px; font-size: 0.85rem; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--axis); }
+.winner { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; font-size: 1rem; }
+.winner .key { width: 18px; height: 4px; }
 .chart-wrap { position: relative; margin-top: 12px; }
 .chart-wrap svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
 .chart-wrap text { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .tooltip {
   position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   min-width: 200px; white-space: nowrap;
 }
 .tooltip b { display: block; margin-bottom: 4px; }
 .tooltip div { display: flex; align-items: center; gap: 6px; }
-.tooltip span:last-child { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
+.tooltip span:nth-child(3) { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
+.tooltip .factor { min-width: 52px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .key { width: 12px; height: 3px; border-radius: 2px; background: var(--c); flex: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; padding: 0; margin: 12px 0 0; font-size: 0.85rem; color: var(--ink-2); }
 .legend li { display: flex; align-items: center; gap: 6px; }
+.legend .champion { color: var(--ink); font-weight: 650; }
+.legend .champion .key { height: 4px; }
 .table { margin-top: 12px; }
 .scroll { overflow-x: auto; margin-top: 8px; }
 table { border-collapse: collapse; font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
