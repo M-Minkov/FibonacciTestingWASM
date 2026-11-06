@@ -11,42 +11,42 @@ export const METHODS = [
   {
     id: 'iterative', name: 'Iterative loop', runtime: 'JavaScript · BigInt', cost: 'n additions → O(n²)',
     mem: 4, code: fibIterative,
-    desc: 'The basic method: start from 0, 1 and keep adding. Only n steps, but the numbers grow to ~0.69n bits, so the total work is quadratic. Fine for thousands, painful past a million.',
+    desc: 'Starts from 0 and 1 and adds the last two numbers, n times. The numbers grow to about 0.69n bits, so each addition gets slower and the total work grows like n².',
   },
   {
     id: 'binet', name: 'Binet’s formula', runtime: 'JavaScript · float64', cost: 'O(1), exact only up to F(70)',
     mem: 0, code: fibBinetFloat, flat: true, exactUpTo: 70, overflowAt: 1475,
-    desc: 'The closed form F(n) = round(φⁿ/√5) with ordinary floating-point numbers. Instant, but a double holds only 53 bits, so it is wrong from F(71) and overflows at F(1475). Here to show why exact big-integer methods exist.',
+    desc: 'Computes φⁿ/√5 with ordinary 64-bit floats and rounds it. A float keeps only about 16 significant digits, so the answer is wrong from F(71), and φⁿ overflows past F(1474).',
   },
   {
     id: 'matrix', name: 'Matrix power', runtime: 'JavaScript · BigInt', cost: 'log₂n steps × 8 multiplications',
     mem: 16, code: fibMatrix,
-    desc: 'The textbook O(log n) method: [[1,1],[1,0]]ⁿ contains F(n), so raise it to the n-th power by repeated squaring. Each squaring of a 2×2 matrix costs 8 big multiplications.',
+    desc: 'Raises the matrix [[1,1],[1,0]] to the n-th power by repeated squaring; the result contains F(n). That is about log₂n squarings, each costing 8 big-number multiplications.',
   },
   {
     id: 'doubling', name: 'Fast doubling', runtime: 'JavaScript · BigInt', cost: 'log₂n steps × 3 multiplications',
     mem: 8, code: fibDoubling,
-    desc: 'Jumps from F(k), F(k+1) straight to F(2k), F(2k+1). Same number of steps as the matrix method, but only 3 multiplications each, because it skips the redundant entries of the matrix.',
+    desc: 'Uses F(2k) = F(k)·(2F(k+1) − F(k)) and F(2k+1) = F(k)² + F(k+1)² to jump from k to 2k. That is about log₂n steps of 3 multiplications each, using JavaScript’s built-in BigInt.',
   },
   {
     id: 'python', name: 'Fast doubling', runtime: 'Python · Pyodide (WASM)', cost: 'log₂n steps × 3 multiplications',
     mem: 10, code: PY_DOUBLING, lang: 'python',
-    desc: 'The exact same algorithm in pure Python, running on CPython compiled to WebAssembly. Python’s int only knows Karatsuba multiplication, so it falls behind on huge numbers.',
+    desc: 'The same fast doubling algorithm, written in plain Python. It runs on Pyodide (the CPython interpreter compiled to WebAssembly) using Python’s built-in integers.',
   },
   {
     id: 'gmpy2', name: 'gmpy2.fib', runtime: 'Python → GMP · Pyodide (WASM)', cost: 'log₂n steps × 2 squarings',
     mem: 8, code: PY_GMPY2, lang: 'python',
-    desc: 'Python again, but the work is handed to GMP through the gmpy2 library. Python is just the glue: the number crunching is GMP’s C code, compiled to WebAssembly as part of Pyodide.',
+    desc: 'Calls gmpy2.fib(n) in Python, on Pyodide. gmpy2 is a Python wrapper around GMP, so the work is done by GMP’s Fibonacci function, mpz_fib_ui.',
   },
   {
     id: 'gmp', name: 'mpz_fib_ui', runtime: 'GMP · gmp-wasm (WASM)', cost: 'log₂n steps × 2 squarings',
     mem: 8, code: gmpFib,
-    desc: 'Calls GMP’s own Fibonacci routine straight from JavaScript, with no Python in between. GMP starts from a lookup table and uses doubling formulas that need only two squarings per step (squaring is cheaper than multiplying).',
+    desc: 'GMP’s built-in Fibonacci function, called from JavaScript through gmp-wasm (GMP compiled to WebAssembly). It starts from a small lookup table and uses doubling formulas that need only two squarings per step; squaring is cheaper than general multiplication.',
   },
   {
-    id: 'mpfr', name: 'Binet’s formula', runtime: 'MPFR · gmp-wasm (WASM)', cost: 'log₂n full-precision multiplications',
+    id: 'mpfr', name: 'Binet’s formula', runtime: 'MPFR · gmp-wasm (WASM)', cost: 'log₂n steps at full precision',
     mem: 16, code: gmpBinet,
-    desc: 'The closed form done right: compute φⁿ/√5 with ~0.69n bits of precision using MPFR, then round. Always exact, but every operation runs at full precision from the first step, so it does far more work than integer doubling.',
+    desc: 'Computes φⁿ/√5 with MPFR, a library for floating-point numbers of any precision, then rounds it. With about 0.69n bits of precision the result is exact, but every step works at full precision, so it does more work than integer fast doubling.',
   },
 ];
 // Palette slots chosen so that lines which run close together on the chart get distinct hues.

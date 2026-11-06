@@ -1,4 +1,4 @@
-import { METHODS, Engine, estimate, learn, curves, interpolate, BYTES_PER_N } from './engine.js';
+import { METHODS, Engine, estimate, learn, curves, interpolate } from './engine.js';
 import { BENCH } from './bench-data.js';
 
 const TIME_LIMIT = 120e3;   // ms: runs expected to take longer are skipped (unless dangerous mode)
@@ -44,9 +44,9 @@ function limitReason(e) {
   const slow = e.total > TIME_LIMIT, big = e.memory > MEMORY_LIMIT;
   if (!slow && !big) return '';
   const why = [];
-  if (slow) why.push(`take too long to compute (2 min+, estimated ${time(e.total)})`);
-  if (big) why.push(`need too much memory (estimated ${bytes(e.memory)})`);
-  return `Expected to ${why.join(' and to ')}.`;
+  if (slow) why.push(`take too long to compute (2 min+, est. ${time(e.total)})`);
+  if (big) why.push(`take too much memory (est. ${bytes(e.memory)})`);
+  return `Expected to ${why.join(' and ')}.`;
 }
 
 /* ---------- State ---------- */
@@ -63,7 +63,6 @@ const cards = METHODS.map(m => {
   el.style.setProperty('--c', m.color);
   el.innerHTML = `
     <header><span class="dot"></span><div><h3></h3><p class="runtime"></p></div></header>
-    <p class="desc"></p>
     <p class="cost"></p>
     <div class="out">
       <p class="headline"></p>
@@ -71,7 +70,7 @@ const cards = METHODS.map(m => {
       <div class="bar" hidden><span></span></div>
       <p class="digits mono" hidden></p>
     </div>
-    <details><summary>Show code</summary><pre><code></code></pre></details>`;
+    <details class="about"><summary>About</summary><p class="desc"></p><pre><code></code></pre></details>`;
   const q = s => el.querySelector(s);
   q('h3').textContent = m.name;
   q('.runtime').textContent = m.runtime;
@@ -80,7 +79,7 @@ const cards = METHODS.map(m => {
   q('code').textContent = typeof m.code === 'function' ? m.code.toString() : m.code;
   $('#methods').append(el);
   const card = {
-    m, el, state: 'idle', loading: 'Starting worker…',
+    m, el, state: 'idle', loading: 'Starting…',
     headline: q('.headline'), detail: q('.detail'), bar: q('.bar'), fill: q('.bar span'), digits: q('.digits'),
   };
   card.engine = new Engine(m, msg => {
@@ -93,46 +92,47 @@ const cards = METHODS.map(m => {
 
 function render(c) {
   const { m, engine } = c;
-  let headline = '', detail = '', progress = null, digits = '';
+  let headline = '', detail = '', progress = null, digits = '', title = '';
   switch (c.state) {
     case 'idle': {
       const e = estimate(m, n), reason = limitReason(e);
-      headline = reason && !dangerous ? 'Will be skipped' : `${e.total < 0.001 ? '' : '≈ '}${time(e.total)} <small>estimated${e.extrapolated ? ', extrapolated' : ''}</small>`;
-      detail = reason && !dangerous ? reason : reason ? 'Over the limits: dangerous mode will run it anyway.' : '';
-      if (n >= m.overflowAt) [headline, detail] = ['Will overflow', `φⁿ is larger than the biggest float64 (≈ 1.8 × 10³⁰⁸) from n = ${int(m.overflowAt)}.`];
-      else if (n > m.exactUpTo) detail = `Will run, but the answer is only approximate past n = ${m.exactUpTo}.`;
+      headline = reason && !dangerous ? 'Will be skipped' : `${e.total < 0.001 ? '' : '≈ '}${time(e.total)} <small>estimated</small>`;
+      detail = reason && !dangerous ? reason : reason ? 'Over the limits; dangerous mode will run it.' : '';
+      if (n >= m.overflowAt) [headline, detail] = ['Will overflow', 'φⁿ is too big for a float64.'];
+      else if (n > m.exactUpTo) detail = `Only approximate past F(${m.exactUpTo}).`;
       if (engine.state === 'loading') detail = `${detail} ${c.loading}`;
-      if (engine.state === 'failed') detail = `Runtime failed to load: ${engine.loadError}`;
+      if (engine.state === 'failed') detail = `Failed to load: ${esc(engine.loadError)}`;
       break;
     }
     case 'queued':
       headline = 'Queued';
-      detail = `Starts when a slot frees up. Expected ~${time(c.expected)}.`;
+      detail = `Expected ~${time(c.expected)}.`;
       break;
     case 'waiting':
-      headline = 'Waiting for runtime';
+      headline = 'Loading…';
       detail = c.loading;
       break;
     case 'running': {
       const elapsed = performance.now() - c.start, p = elapsed / c.expected;
       headline = c.computedMs == null ? 'Computing…' : 'Extracting digits…';
-      detail = c.computedMs != null ? `Computed in ${time(c.computedMs)}; now finding the digits.`
-        : p <= 1 ? `Still loading result. Expected wait for this input: ~${time(c.expected)} (${time(elapsed)} so far).`
-        : `Taking longer than expected (estimate was ~${time(c.expected)}, ${time(elapsed)} so far).`;
+      detail = c.computedMs != null ? `Computed in ${time(c.computedMs)}.`
+        : p <= 1 ? `Still loading result. Expected wait: ~${time(c.expected)} (${time(elapsed)} so far).`
+        : `Taking longer than expected (~${time(c.expected)} estimated, ${time(elapsed)} so far).`;
       progress = p;
       break;
     }
     case 'done': {
       const r = c.result;
       headline = `${time(r.computeMs)} <small>to compute</small>`;
-      detail = `${int(r.digits)} digit${r.digits === 1 ? '' : 's'} · digits found in ${time(r.summaryMs)}${r.reps > 1 ? ` · average of ${int(r.reps)} runs` : ''}`;
+      detail = `${int(r.digits)} digit${r.digits === 1 ? '' : 's'}`;
       if (c.check) detail += ` · <span class="check ${c.check[0] === '✓' ? 'ok' : 'bad'}">${c.check}</span>`;
+      title = `Digits extracted in ${time(r.summaryMs)}${r.reps > 1 ? `; compute time is the average of ${int(r.reps)} runs` : ''}`;
       digits = r.tail ? `${r.head.slice(0, 18)}…${r.tail.slice(-18)}` : r.head;
       break;
     }
     case 'skipped':
       headline = 'Not run';
-      detail = `${c.reason} Enable dangerous mode at the bottom of the page to run it anyway.`;
+      detail = `${c.reason} Dangerous mode (bottom of the page) runs it anyway.`;
       break;
     case 'error':
       headline = 'Failed';
@@ -145,6 +145,7 @@ function render(c) {
   c.el.dataset.state = c.state;
   c.headline.innerHTML = headline;
   c.detail.innerHTML = detail.trim();
+  c.detail.title = title;
   c.bar.hidden = progress == null;
   c.bar.classList.toggle('over', progress > 1);
   if (progress != null) c.fill.style.width = `${Math.min(progress, 1) * 100}%`;
@@ -163,7 +164,7 @@ function verify() {
   const best = Math.max(...Object.values(count));
   for (const c of done) {
     const k = count[key(c.result)];
-    c.check = done.length < 2 ? '' : k === best && k > 1 ? `✓ matches ${k - 1} other${k > 2 ? 's' : ''}` : '✗ differs from the others';
+    c.check = done.length < 2 ? '' : k === best && k > 1 ? `✓ matches ${k - 1} other${k > 2 ? 's' : ''}` : '✗ differs';
     render(c);
   }
 }
@@ -237,7 +238,7 @@ function tick() {
 }
 
 function updateButton() {
-  ui.run.textContent = running ? 'Cancel' : 'Run comparison';
+  ui.run.textContent = running ? 'Cancel' : 'Run';
   ui.run.classList.toggle('cancel', running);
   ui.run.disabled = !running && !valid(n);
 }
@@ -250,9 +251,9 @@ function setN(value) {
   n = value;
   const ok = valid(n);
   ui.n.setAttribute('aria-invalid', String(!ok));
-  ui.info.textContent = ok
-    ? `F(${int(n)}) has ${int(digitsOf(n))} digit${n < 7 ? '' : 's'} (${bytes(Math.max(n * BYTES_PER_N, 1))} in binary). Also accepts 1e6, 10^6 or 2.5M.`
-    : `Enter a whole number from 0 to ${int(MAX_N)}. Formats like 1e6, 10^6 or 2.5M work too.`;
+  ui.info.hidden = ok;
+  ui.info.textContent = ok ? '' : `Enter a whole number from 0 to ${int(MAX_N)} (1e6 or 2.5M work too).`;
+  ui.n.title = ok ? `F(${int(n)}) has ${int(digitsOf(n))} digit${n < 7 ? '' : 's'}` : '';
   updateButton();
   if (!running && ok) cards.forEach(c => { c.state = 'idle'; render(c); });
   drawChart();
@@ -266,7 +267,7 @@ document.querySelectorAll('.presets button').forEach(b => b.addEventListener('cl
 }));
 ui.run.addEventListener('click', runAll);
 ui.conc.addEventListener('input', () => { ui.concOut.textContent = ui.conc.value; if (running) pump(); });
-$('#cores-hint').textContent = `Each runs on its own CPU core. Your device reports ${navigator.hardwareConcurrency || 'an unknown number of'} logical cores; running more methods than that slows them all down.`;
+$('#cores-hint').textContent = `Each method runs on its own thread. Your device has ${navigator.hardwareConcurrency || 'an unknown number of'} logical cores.`;
 
 function setDangerous(on) {
   dangerous = ui.danger.checked = on;
@@ -363,14 +364,14 @@ new ResizeObserver(() => drawChart()).observe(box);
 // Legend, data table and benchmark details
 $('#legend').innerHTML = METHODS.map(m => `<li><span class="key" style="--c:${m.color}"></span>${esc(label(m))}</li>`).join('');
 const ns = [...new Set(Object.values(BENCH.results).flatMap(rows => rows.map(r => r[0])))].sort((a, b) => a - b);
-const table = `<details class="table"><summary>Show the measurements as a table</summary><div class="scroll"><table>
+const table = `<details class="table"><summary>Show as a table</summary><div class="scroll"><table>
   <thead><tr><th>n</th>${METHODS.map(m => `<th>${esc(label(m))}</th>`).join('')}</tr></thead>
   <tbody>${ns.map(v => `<tr><th>${int(v)}</th>${METHODS.map(m => {
     const row = BENCH.results[m.id]?.find(r => r[0] === v);
     return `<td>${row ? time(row[1]) : ''}</td>`;
   }).join('')}</tr>`).join('')}</tbody></table></div></details>`;
-$('#bench-meta').innerHTML = `Measured on ${esc(BENCH.device ?? 'unknown')}, ${esc(BENCH.date ?? '')}. Compute time only; finding the digits is extra.
-  Your machine will differ: the <a href="bench.html">benchmark runner</a> regenerates this data.`;
+$('#bench-meta').innerHTML = `${esc(BENCH.device ?? 'Unknown device')}, ${esc(BENCH.date ?? '')}. Compute time only.
+  <a href="bench.html">Benchmark your own machine</a>.`;
 $('#bench-meta').insertAdjacentHTML('afterend', table);
 
 setN(n);

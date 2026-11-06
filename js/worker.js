@@ -73,7 +73,7 @@ async function init(method) {
   if (JS[method]) {
     run = (n, reps) => timed(() => JS[method](n), x => summarizeBigInt(x, n), reps);
   } else if (method === 'python' || method === 'gmpy2') {
-    status('Downloading Python runtime (Pyodide, ~10 MB)…');
+    status('Loading Python (~10 MB)…');
     const { loadPyodide } = await import(PYODIDE + 'pyodide.mjs');
     const py = await loadPyodide({ indexURL: PYODIDE });
     if (method === 'gmpy2') { status('Loading gmpy2…'); await py.loadPackage('gmpy2'); }
@@ -84,7 +84,7 @@ async function init(method) {
       return { digits, head, tail };
     }, reps);
   } else {
-    status('Loading GMP (WebAssembly)…');
+    status('Loading GMP…');
     await import(GMP); // UMD bundle: defines globalThis.gmp
     const { binding: g } = await globalThis.gmp.init();
     const fn = method === 'gmp' ? gmpFib : gmpBinet;

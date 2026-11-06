@@ -1,10 +1,10 @@
-# Fibonacci in the Browser
+# FibonacciTestingWASM
+
+This project is a simple web-based tool to compare the performance of different Fibonacci number calculation
+methods, with a focus on WebAssembly (WASM) and Python in the browser. It shows different, interesting ways of
+calculating very large Fibonacci numbers, and the benefits of running WASM in the browser.
 
 **Live demo: https://m-minkov.github.io/FibonacciTestingWASM/**
-
-Eight ways to compute huge Fibonacci numbers, racing side by side, entirely client-side: from a plain loop,
-through textbook O(log n) algorithms, to CPython and the GMP math library compiled to WebAssembly.
-Every method runs in its own Web Worker, so the page stays responsive even when a run takes minutes.
 
 ![Screenshot of the page](docs/screenshot.png)
 
@@ -50,7 +50,7 @@ Compute time on an Intel Core i5-14400, Chromium 152 (the full data is in the ch
 
 ## How it works
 
-- `js/algorithms.js`: the implementations. The page shows this exact source in each card's "Show code".
+- `js/algorithms.js`: the implementations. The page shows this exact source under each card's "About".
 - `js/worker.js`: one module worker per method. Loads Pyodide or gmp-wasm only when needed, times the
   computation, and extracts the digits. Cancelling a run terminates the worker.
 - `js/engine.js`: method metadata, the worker wrapper, and run-time/memory estimates (log-log interpolation of
