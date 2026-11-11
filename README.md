@@ -18,11 +18,11 @@ free to take any code from this repo for your own experiments.
 
 **Live demo: https://m-minkov.github.io/FibonacciTestingWASM/**
 
-<p align="center"><img src="docs/screenshot.png" width="480" alt="The page after computing F(1,000,000) with every method"></p>
+<p align="center"><img src="docs/screenshot.png" width="480" alt="The page after computing F(1,000,000) with every method in BigInt mode"></p>
 
 ## Results
 
-<p align="center"><img src="docs/chart.png" width="720" alt="Running time of each method against n, on logarithmic axes"></p>
+<p align="center"><img src="docs/chart.png" width="720" alt="Running time of each BigInt method against n, on logarithmic axes"></p>
 
 ### BigInt mode
 
@@ -56,19 +56,8 @@ What this shows:
 
 ### Float mode
 
-With a fixed 64 digits, F(n) stays the same size at any n, so every method except the loop takes well under a
-millisecond. Same machine, Chromium 156:
-
-| Method | Runs on | F(10⁶) | F(10⁹) | Correct digits at F(10⁹) |
-|---|---|---|---|---|
-| **Binet's formula** | **MPFR, compiled to WASM** | **4.6 µs** | **7.1 µs** | 55 |
-| Fast doubling | MPFR, compiled to WASM | 15 µs | 24 µs | 58 |
-| Fast doubling | JavaScript, decimal.js | 172 µs | 307 µs | 57 |
-| Binet's formula | JavaScript, decimal.js | 204 µs | 340 µs | 54 |
-| Fast doubling | Python `decimal`, on Pyodide (WASM) | 237 µs | 304 µs | 57 |
-| Binet's formula | Python calling MPFR (gmpy2), on Pyodide (WASM) | 281 µs | 320 µs | 55 |
-| Matrix power | JavaScript, decimal.js | 450 µs | 797 µs | 57 |
-| Iterative loop | JavaScript, decimal.js | 439 ms | not run (about 10 min) | 57 at F(3·10⁷) |
+With a fixed 64 digits, F(n) stays the same size at any n, so every method except the loop finishes in well under a
+millisecond; the fastest, Binet's formula with MPFR, takes about 7 µs for F(10⁹).
 
 What this shows:
 
