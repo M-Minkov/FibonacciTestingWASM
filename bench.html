@@ -33,7 +33,7 @@
       await engine.run(1000); // warm up the JIT
       const rows = [];
       for (const n of LADDER) {
-        const next = rows.length > 1 ? interpolate(rows.map(r => [r[0], Math.max(r[1] + r[2], 0.01)]), n, m.mode === 'float' ? 0 : 1) : 0;
+        const next = rows.length > 1 ? interpolate(rows.map(r => [r[0], Math.max(r[1] + r[2], 0.01)]), n, ...(m.mode === 'float' ? [0, 1] : [1, 2])) : 0;
         if (next > MAX_MS || m.mem * n * BYTES_PER_N > MAX_BYTES || n >= m.overflowAt) break;
         const runs = [];
         try {

@@ -5,7 +5,10 @@ import Decimal from './vendor/decimal-10.6.0.mjs';
 
 const TIME_LIMIT = 120e3;   // ms: runs expected to take longer are skipped (unless dangerous mode)
 const MEMORY_LIMIT = 1.5e9; // bytes
-const MAX_N = 2 ** 32 - 1;  // GMP's mpz_fib_ui takes an unsigned 32-bit n
+// Largest n per mode. BigInt: GMP's mpz_fib_ui takes an unsigned 32-bit n, and F(2^32) would have 898 million
+// digits, more than the other methods' memory or size limits allow. Float: F(n) stays 64 digits at any n,
+// so the limit is the largest whole number a JavaScript number holds exactly, 2^53 − 1.
+const MAX_N = { bigint: 2 ** 32 - 1, float: Number.MAX_SAFE_INTEGER };
 const $ = s => document.querySelector(s);
 const ui = {
   n: $('#n'), info: $('#n-info'), run: $('#run'), status: $('#run-status'),
@@ -52,7 +55,7 @@ function parseN(text) {
   if (/^\d+$/.test(t)) return Number(t);
   if ((m = t.match(/^(\d+(?:\.\d+)?)e(\d+)$/))) return Math.round(m[1] * 10 ** m[2]);
   if ((m = t.match(/^(\d+)(?:\^|\*\*)(\d+)$/))) return Number(m[1]) ** Number(m[2]);
-  if ((m = t.match(/^(\d+(?:\.\d+)?)([kmb])$/))) return Math.round(m[1] * { k: 1e3, m: 1e6, b: 1e9 }[m[2]]);
+  if ((m = t.match(/^(\d+(?:\.\d+)?)([kmbt])$/))) return Math.round(m[1] * { k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2]]);
   return NaN;
 }
 
@@ -328,14 +331,17 @@ function updateButton() {
 
 /* ---------- Inputs ---------- */
 
-const valid = x => Number.isSafeInteger(x) && x >= 0 && x <= MAX_N;
+const valid = x => Number.isSafeInteger(x) && x >= 0 && x <= MAX_N[mode];
 
 function setN(value) {
   n = value;
   const ok = valid(n);
   ui.n.setAttribute('aria-invalid', String(!ok));
   ui.info.hidden = ok;
-  ui.info.textContent = ok ? '' : `Enter a whole number from 0 to ${int(MAX_N)} (1e6 or 2.5M work too).`;
+  ui.info.textContent = ok ? ''
+    : mode === 'bigint' && Number.isSafeInteger(n) && n > MAX_N.bigint
+      ? `BigInt mode goes up to F(${int(MAX_N.bigint)}), which already has ${int(digitsOf(MAX_N.bigint))} digits. Float mode goes up to F(${int(MAX_N.float)}).`
+      : `Enter a whole number from 0 to ${int(MAX_N[mode])} (1e6, 2.5M or 1T work too).`;
   ui.n.title = ok ? `F(${int(n)}) has ${int(digitsOf(n))} digit${n < 7 ? '' : 's'}` : '';
   updateButton();
   if (!running && ok) { cards.forEach(c => { c.state = 'idle'; render(c); }); markFastest(); }
@@ -368,7 +374,7 @@ $('#danger-off').addEventListener('click', () => setDangerous(false));
 
 const box = $('#chart-box');
 const tooltip = Object.assign(document.createElement('div'), { className: 'tooltip', hidden: true });
-const X0 = 1, X1 = Math.log10(MAX_N);
+const X0 = 1, X1 = Math.log10(MAX_N.bigint); // the benchmarks go up to here
 const X_LABELS = ['10', '100', '1K', '10K', '100K', '1M', '10M', '100M', '1B'];
 const VIEWS = {
   time: {

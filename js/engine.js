@@ -103,10 +103,10 @@ METHODS.forEach(m => { m.color = `var(--s${SLOTS[m.id]})`; });
 
 // Log-log interpolation between benchmark points. Beyond the last point, extend the slope of
 // the last segment plus a small safety margin (big-number code tends to get relatively slower
-// as it outgrows CPU caches), never flatter than minSlope (linear for BigInts, since the answer
-// itself grows linearly; floats have a fixed size, so only "not faster") and never steeper than
-// quadratic, since no method here is worse than O(n²).
-export function interpolate(points, n, minSlope = 1) {
+// as it outgrows CPU caches), kept between minSlope and maxSlope. BigInts: at least linear, since the
+// answer itself grows linearly, and at most quadratic, since no method here is worse than O(n²).
+// Floats have a fixed size: the work grows at most linearly (the loop), and digit extraction not at all.
+export function interpolate(points, n, minSlope = 1, maxSlope = 2) {
   if (!points?.length) return null;
   const L = Math.log;
   if (n <= points[0][0]) return points[0][1];
@@ -115,7 +115,7 @@ export function interpolate(points, n, minSlope = 1) {
     if (n <= n2) return Math.exp(L(t1) + (L(t2) - L(t1)) * (L(n) - L(n1)) / (L(n2) - L(n1)));
   }
   const [n2, t2] = points.at(-1), [n1, t1] = points.at(-2) ?? [n2 / 10, t2];
-  const slope = Math.min(2, Math.max(minSlope, (L(t2) - L(t1)) / (L(n2) - L(n1)))) + 0.1;
+  const slope = Math.min(maxSlope, Math.max(minSlope, (L(t2) - L(t1)) / (L(n2) - L(n1)))) + 0.1;
   return t2 * (n / n2) ** slope;
 }
 
@@ -132,13 +132,13 @@ for (const m of METHODS) {
     compute: rows.map(([n, ms]) => [n, c = Math.max(c, ms)]),
     summary: summary.map(([n, ms]) => [n, Math.max(ms, 1e-5)]),
     maxN: rows.at(-1)?.[0] ?? 0,
-    minSlope: m.mode === 'float' ? 0 : 1,
+    slopes: m.mode === 'float' ? { compute: [0, 1], summary: [0, 0] } : { compute: [1, 2], summary: [1, 2] },
   };
 }
 
 // Benchmark-based compute time and digit-extraction time of method m at n, in ms.
-export const computeAt = (m, n) => interpolate(curves[m.id].compute, n, curves[m.id].minSlope);
-const summaryAt = (m, n) => interpolate(curves[m.id].summary, n, curves[m.id].minSlope);
+export const computeAt = (m, n) => interpolate(curves[m.id].compute, n, ...curves[m.id].slopes.compute);
+const summaryAt = (m, n) => interpolate(curves[m.id].summary, n, ...curves[m.id].slopes.summary);
 
 export const calibration = {}; // per-method speed factor for this device, learned from real runs
 

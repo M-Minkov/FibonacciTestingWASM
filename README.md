@@ -70,10 +70,12 @@ What this shows:
 - **Rounding errors add up slowly.** Each method loses about one digit each time n grows tenfold (Binet's formula two
   or three more, since the error in φ is raised to the n-th power). 64 working digits leave every method with at
   least 54 correct digits up to F(4,294,967,295); the page checks the first 50 of every result against a 128-digit
-  reference and says so if a method falls short.
+  reference and says so if a method falls short. Float mode accepts n up to 2^53 − 1 (9,007,199,254,740,991), where
+  only the decimal.js methods remain: matrix power and fast doubling still have 50 correct digits there, while
+  Binet's formula drops below 50 from about F(10¹⁴) and ends at 47.
 - **Floats have their own limit: the exponent.** MPFR's largest exponent is 2^1,073,741,823, which F(n) passes at
   about F(1,546,639,296) (Binet's φⁿ two steps earlier), and Python's `decimal` on 32-bit WASM stops at
-  10^425,000,000, passed at F(2,033,613,092). decimal.js goes far beyond 4.3 billion.
+  10^425,000,000, passed at F(2,033,613,092). decimal.js reaches every n up to 2^53 − 1.
 
 ## Every browser has its own BigInt
 

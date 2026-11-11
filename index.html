@@ -115,13 +115,17 @@
             are exact, and Binet’s formula is exact up to about F(250); at F(10⁹) the methods have 54 to 58 correct
             digits. So 64 working digits leave room for the 50 that are checked. The page compares every
             result with Binet’s formula computed with 128 digits; if a method falls below 50, its card says so.</p>
+          <p>That does happen at the very top. Float mode accepts n up to 9,007,199,254,740,991 (2^53 − 1, the
+            largest whole number a JavaScript number holds exactly), and past F(4,294,967,295) only the decimal.js
+            methods are left. There, matrix power and fast doubling still keep 50 correct digits, but Binet’s
+            formula drops below 50 from about F(10¹⁴) and reaches 47 at the largest n.</p>
         </details>
         <details>
           <summary>Why do some floats overflow?</summary>
           <p>A float stores an exponent, and the exponent has a limit. MPFR’s is 2^1,073,741,823 (about
             10^323,228,496), which fast doubling passes at F(1,546,639,296). Binet’s formula overflows two steps
             earlier, because φⁿ is √5 times bigger than F(n). Python’s <code>decimal</code> allows up to
-            10^425,000,000 in a 32-bit build like Pyodide, passed at F(2,033,613,092). decimal.js allows 10^9,000,000,000,000,000, far beyond any n here.</p>
+            10^425,000,000 in a 32-bit build like Pyodide, passed at F(2,033,613,092). decimal.js allows 10^9,000,000,000,000,000, enough for every n float mode accepts.</p>
         </details>
         <details>
           <summary>Why doesn’t the page freeze?</summary>
