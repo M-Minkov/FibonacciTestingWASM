@@ -176,6 +176,9 @@ thead th { color: var(--ink-2); font-weight: 600; white-space: normal; min-width
 .faq details { border-bottom: 1px solid var(--line); padding: 12px 0; }
 .faq summary { color: var(--ink); font-size: 1rem; font-weight: 600; }
 .faq p { color: var(--ink-2); max-width: 75ch; margin: 8px 0 0; }
+.faq .scroll { margin-top: 10px; }
+.faq table { color: var(--ink-2); }
+.faq td:first-child { text-align: left; }
 
 /* Dangerous mode */
 .danger { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }

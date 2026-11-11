@@ -98,6 +98,48 @@
             the most heavily tuned.</p>
         </details>
         <details>
+          <summary>Why does Firefox say “BigInt is too large to allocate”?</summary>
+          <p>Every browser has its own BigInt code, with its own size limit. Firefox and Safari stop at 1,048,576
+            bits (about 315,000 digits), so in Firefox the JavaScript methods reach F(1,510,299) and no further.
+            Chrome and Edge allow 1,024 times more, enough for about F(1,500,000,000). The WASM methods don’t have
+            this limit: GMP and Python bring their own big-number code, which is the same in every browser and
+            limited only by memory.</p>
+        </details>
+        <details>
+          <summary>Does the browser change the speed?</summary>
+          <p>For BigInt, by a lot. Chrome’s JavaScript engine (V8) multiplies huge numbers with Karatsuba,
+            Toom-Cook and FFT, and turns them into decimal digits with a fast divide-and-conquer method. Firefox
+            still uses the schoolbook methods, whose cost grows with the square of the size. The same code on the
+            same computer:</p>
+          <div class="scroll">
+            <table>
+              <thead><tr><th></th><th>Chrome 157</th><th>Firefox 159</th></tr></thead>
+              <tbody>
+                <tr><td>Largest BigInt</td><td>1,073,741,760 bits</td><td>1,048,576 bits</td></tr>
+                <tr><td>Fast doubling, F(10⁶)</td><td>7.2 ms</td><td>102 ms</td></tr>
+                <tr><td>Fast doubling, F(10⁷)</td><td>101 ms</td><td>too large</td></tr>
+                <tr><td>Squaring a 520,681-bit BigInt</td><td>2.1 ms</td><td>54 ms</td></tr>
+                <tr><td>F(10⁶) to decimal digits</td><td>22 ms</td><td>523 ms</td></tr>
+                <tr><td><code>mpz_fib_ui</code> (WASM), F(10⁷)</td><td>69 ms</td><td>82 ms</td></tr>
+                <tr><td><code>mpz_fib_ui</code> (WASM), F(10⁸)</td><td>1.10 s</td><td>1.27 s</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>GMP barely changes, because both browsers run the very same compiled code. The time estimates on this
+            page were measured in Chrome, so in Firefox the BigInt methods take longer than predicted (the page
+            adjusts after a run). WebKit, Safari’s engine, added the fast multiplication algorithms in autumn 2026,
+            but kept the 1,048,576-bit limit.</p>
+        </details>
+        <details>
+          <summary>Can even ordinary math differ between browsers?</summary>
+          <p>Yes. The JavaScript standard lets <code>**</code> and <code>Math.pow</code> be approximate. φ⁴, from
+            Binet’s formula, is <code>((1 + Math.sqrt(5)) / 2) ** 4</code>: Chrome gives 6.854101966249686, the
+            correctly rounded answer, while Firefox computes it as (φ·φ)·(φ·φ) and gets 6.854101966249685, one bit
+            lower. WASM doesn’t leave that choice to the browser: its arithmetic must round exactly as the IEEE 754
+            standard says, and functions like <code>pow</code> are compiled into the module, so the same WASM code
+            gives the same bits everywhere.</p>
+        </details>
+        <details>
           <summary>Why is gmpy2 slower than mpz_fib_ui?</summary>
           <p>Both call the same GMP function, but from different builds of GMP. gmp-wasm’s build is optimized and
             tuned for WebAssembly; Pyodide’s is built without GMP’s usual optimization flags.</p>
@@ -130,6 +172,12 @@
         <li><a href="https://gmpy2.readthedocs.io/">gmpy2 documentation</a></li>
         <li><a href="https://www.mpfr.org/">MPFR</a></li>
         <li><a href="https://github.com/v8/v8/tree/main/src/bigint">V8 BigInt source</a> (Karatsuba, Toom-Cook, FFT)</li>
+        <li>BigInt size limits: <a href="https://github.com/v8/v8/blob/main/src/objects/bigint.h">V8 (Chrome)</a>,
+          <a href="https://github.com/mozilla-firefox/firefox/blob/main/js/src/vm/BigIntType.h">SpiderMonkey (Firefox)</a>,
+          <a href="https://github.com/WebKit/WebKit/blob/main/Source/JavaScriptCore/runtime/JSBigInt.h">JavaScriptCore (Safari)</a></li>
+        <li><a href="https://tc39.es/ecma262/#sec-numeric-types-number-exponentiate">ECMAScript standard: <code>**</code> is implementation-approximated</a>
+          and <a href="https://github.com/mozilla-firefox/firefox/blob/main/js/src/builtin/Math.cpp">Firefox’s <code>Math.pow</code></a></li>
+        <li><a href="https://github.com/WebAssembly/design/blob/main/Nondeterminism.md">WebAssembly design: where WASM may behave differently</a></li>
         <li><a href="https://github.com/python/cpython/blob/main/Objects/longobject.c">CPython <code>longobject.c</code></a> (Python’s integers)</li>
         <li><a href="https://docs.python.org/3/library/stdtypes.html#int-max-str-digits">Python docs: integer string conversion limit</a></li>
         <li><a href="https://en.wikipedia.org/wiki/Fibonacci_sequence#Closed-form_expression">Wikipedia: Binet’s formula</a></li>
