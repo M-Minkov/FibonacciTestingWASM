@@ -17,12 +17,19 @@
 
   <header class="wrap hero">
     <h1>Fibonacci in the browser</h1>
-    <p class="lede">Eight ways to compute huge Fibonacci numbers, from a plain loop to C libraries compiled to
-      WebAssembly. Everything runs on your device.</p>
+    <p class="lede">Ways to compute huge Fibonacci numbers, from a plain loop to C libraries compiled to
+      WebAssembly, with exact big integers or with high-precision floats. Everything runs on your device.</p>
   </header>
 
   <main class="wrap">
     <section class="panel controls" aria-label="Run">
+      <div class="mode-row">
+        <div class="seg" id="mode" role="group" aria-label="Number type">
+          <button type="button" data-mode="bigint" aria-pressed="true">BigInt: exact</button>
+          <button type="button" data-mode="float" aria-pressed="false">Float: 64 digits</button>
+        </div>
+        <p class="hint" id="mode-hint"></p>
+      </div>
       <div class="run-row">
         <label class="fn" for="n">F(</label>
         <input id="n" value="1,000,000" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="n">
@@ -62,6 +69,7 @@
       <div class="chart-wrap" id="chart-box"></div>
       <ul class="legend" id="legend"></ul>
       <p class="hint" id="bench-meta"></p>
+      <div id="bench-table"></div>
     </section>
 
     <section id="ideas">
@@ -85,6 +93,35 @@
         <details>
           <summary>What is a BigInt?</summary>
           <p>JavaScript’s built-in integer type with no size limit, written like <code>123n</code>.</p>
+        </details>
+        <details>
+          <summary>What’s the difference between BigInt and float mode?</summary>
+          <p>BigInt mode uses whole numbers with no size limit in every method (JavaScript’s BigInt, Python’s
+            <code>int</code>, GMP’s <code>mpz</code>), so F(n) comes out exact, every digit. Those numbers grow with
+            n: F(1,000,000) is 694,241 bits, and every step works on numbers that big.</p>
+          <p>Float mode uses floating-point numbers with a fixed precision of 64 significant digits in every method:
+            <a href="https://github.com/MikeMcl/decimal.js">decimal.js</a> in JavaScript, Python’s
+            <code>decimal</code> module, and MPFR at 213 bits (called directly or through gmpy2). F(n) is stored as
+            64 digits and an exponent, like 1.953… × 10^208,987, so every step costs about the same at any n.
+            Binet’s formula, φⁿ/√5, needs fractions, so it is only in float mode.</p>
+        </details>
+        <details>
+          <summary>Why 64 digits, and how accurate are the floats?</summary>
+          <p>JavaScript’s ordinary numbers (float64) keep only about 16 digits, are exact only up to F(78), and
+            overflow past F(1,476). Float mode uses libraries that can be set to any precision, all set to 64 digits.</p>
+          <p>Each rounding error is tiny, but every step multiplies the errors so far, so a method loses roughly one
+            digit each time n grows tenfold. Binet’s formula loses two or three more, because the error in φ is raised
+            to the n-th power too. Measured: while F(n) fits in 64 digits (up to F(307)), the other methods
+            are exact, and Binet’s formula is exact up to about F(250); at F(10⁹) the methods have 54 to 58 correct
+            digits. So 64 working digits leave room for the 50 that are checked. The page compares every
+            result with Binet’s formula computed with 128 digits; if a method falls below 50, its card says so.</p>
+        </details>
+        <details>
+          <summary>Why do some floats overflow?</summary>
+          <p>A float stores an exponent, and the exponent has a limit. MPFR’s is 2^1,073,741,823 (about
+            10^323,228,496), which fast doubling passes at F(1,546,639,296). Binet’s formula overflows two steps
+            earlier, because φⁿ is √5 times bigger than F(n). Python’s <code>decimal</code> allows up to
+            10^425,000,000 in a 32-bit build like Pyodide, passed at F(2,033,613,092). decimal.js allows 10^9,000,000,000,000,000, far beyond any n here.</p>
         </details>
         <details>
           <summary>Why doesn’t the page freeze?</summary>
@@ -146,8 +183,7 @@
         </details>
         <details>
           <summary>Why are only the first and last digits shown?</summary>
-          <p>The numbers are usually too big to show: F(1,000,000) alone has 208,988 digits. They are also stored in
-            binary, and converting them into readable decimal digits can take even longer than the calculation itself.</p>
+          <p>The numbers are usually too big to show: F(1,000,000) alone has 208,988 digits.</p>
         </details>
       </div>
     </section>

@@ -216,3 +216,6 @@ textarea { width: 100%; font: 0.75rem var(--mono); background: var(--surface); c
   .bar span { transition: none; }
   .bar.over span { animation: none; }
 }
+.mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.mode-row .hint { margin: 0; flex: 1 1 280px; }
+.seg button:disabled { opacity: 0.6; cursor: not-allowed; }

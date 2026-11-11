@@ -4,6 +4,13 @@ This project is a simple web-based tool to compare the performance of different 
 methods, with a focus on WebAssembly (WASM) and Python in the browser. It shows different, interesting ways of
 calculating very large Fibonacci numbers, and the benefits of running WASM in the browser.
 
+It has two modes, and every method in a mode uses the same kind of number:
+
+- **BigInt mode**: whole numbers with no size limit (JavaScript's `BigInt`, Python's `int`, GMP's `mpz`). Every digit
+  of F(n) is exact.
+- **Float mode**: floats with 64 significant digits (decimal.js, Python's `decimal`, MPFR at 213 bits). F(n) is
+  rounded, but stays fast at any n, and Binet's formula becomes possible.
+
 The results show how WASM can be very beneficial, and much faster, in specific cases: GMP, a C library for huge
 numbers, compiled to WASM beats every other method here, including JavaScript's built-in `BigInt`. It isn't hard to
 set up either: calling GMP from JavaScript takes a few lines (see [`js/algorithms.js`](js/algorithms.js)), and you're
@@ -17,6 +24,8 @@ free to take any code from this repo for your own experiments.
 
 <p align="center"><img src="docs/chart.png" width="720" alt="Running time of each method against n, on logarithmic axes"></p>
 
+### BigInt mode
+
 **The fastest method is `mpz_fib_ui`: GMP compiled to WASM.** Time to compute F(n) on an Intel Core i5-14400 in
 Chromium 152:
 
@@ -26,10 +35,8 @@ Chromium 152:
 | Fast doubling | JavaScript `BigInt` | 9.4 ms | 2.1 s |
 | Matrix power | JavaScript `BigInt` | 34 ms | 6.3 s |
 | `gmpy2.fib` | Python calling GMP, on Pyodide (WASM) | 49 ms | 10.5 s |
-| Binet's formula | MPFR, compiled to WASM | 174 ms | 51 s |
 | Fast doubling | Pure Python, on Pyodide (WASM) | 45 ms | 91 s |
 | Iterative loop | JavaScript `BigInt` | 5.9 s | not run (about 2 days) |
-| Binet's formula | JavaScript float64 | overflows | overflows |
 
 These are Chromium numbers. In Firefox the JavaScript `BigInt` rows are much slower, and in Firefox and Safari they
 stop with an error past about F(1,500,000). See [Every browser has its own BigInt](#every-browser-has-its-own-bigint).
@@ -46,6 +53,38 @@ What this shows:
   method needs only about log₂ n steps.
 - **WASM runs the same in every browser; `BigInt` doesn't.** Each browser has its own `BigInt`, with different
   algorithms and size limits. GMP compiled to WASM is the same code everywhere.
+
+### Float mode
+
+With a fixed 64 digits, F(n) stays the same size at any n, so every method except the loop takes well under a
+millisecond. Same machine, Chromium 156:
+
+| Method | Runs on | F(10⁶) | F(10⁹) | Correct digits at F(10⁹) |
+|---|---|---|---|---|
+| **Binet's formula** | **MPFR, compiled to WASM** | **4.6 µs** | **7.1 µs** | 55 |
+| Fast doubling | MPFR, compiled to WASM | 15 µs | 24 µs | 58 |
+| Fast doubling | JavaScript, decimal.js | 172 µs | 307 µs | 57 |
+| Binet's formula | JavaScript, decimal.js | 204 µs | 340 µs | 54 |
+| Fast doubling | Python `decimal`, on Pyodide (WASM) | 237 µs | 304 µs | 57 |
+| Binet's formula | Python calling MPFR (gmpy2), on Pyodide (WASM) | 281 µs | 320 µs | 55 |
+| Matrix power | JavaScript, decimal.js | 450 µs | 797 µs | 57 |
+| Iterative loop | JavaScript, decimal.js | 439 ms | not run (about 10 min) | 57 at F(3·10⁷) |
+
+What this shows:
+
+- **Precision is the real cost.** The same fast doubling that takes 2.1 s for an exact F(10⁸) takes 0.3 ms with 64
+  digits. Exact answers need every one of F(n)'s 0.69n bits; floats keep only the leading ones.
+- **Binet's formula wins once fractions are cheap.** It is one power φⁿ, and MPFR computes powers with few, correctly
+  rounded steps. In BigInt mode it can't be used at all.
+- **The Python and gmpy2 rows are mostly overhead.** Calling into Pyodide costs about 0.2 ms, much more than the
+  arithmetic itself.
+- **Rounding errors add up slowly.** Each method loses about one digit each time n grows tenfold (Binet's formula two
+  or three more, since the error in φ is raised to the n-th power). 64 working digits leave every method with at
+  least 54 correct digits up to F(4,294,967,295); the page checks the first 50 of every result against a 128-digit
+  reference and says so if a method falls short.
+- **Floats have their own limit: the exponent.** MPFR's largest exponent is 2^1,073,741,823, which F(n) passes at
+  about F(1,546,639,296) (Binet's φⁿ two steps earlier), and Python's `decimal` on 32-bit WASM stops at
+  10^425,000,000, passed at F(2,033,613,092). decimal.js goes far beyond 4.3 billion.
 
 ## Every browser has its own BigInt
 
@@ -110,14 +149,16 @@ Some details behind those numbers:
 
 ## The methods
 
-| Method | How it works |
-|---|---|
-| Iterative loop | Add the last two numbers, n times. |
-| Binet's formula (float64) | Round φⁿ/√5 using ordinary floats. Exact only up to F(70). |
-| Matrix power | Raise [[1,1],[1,0]] to the n-th power by repeated squaring: log₂ n steps × 8 multiplications. |
-| Fast doubling | Jump from F(k), F(k+1) to F(2k), F(2k+1): log₂ n steps × 3 multiplications. |
-| `mpz_fib_ui` and `gmpy2.fib` | GMP's own Fibonacci function: doubling with 2 squarings per step. |
-| Binet's formula (MPFR) | φⁿ/√5 with about 0.69n bits of precision, so the rounded result is exact. |
+| Method | How it works | Modes |
+|---|---|---|
+| Iterative loop | Add the last two numbers, n times. | BigInt, float |
+| Matrix power | Raise [[1,1],[1,0]] to the n-th power by repeated squaring: log₂ n steps × 8 multiplications. | BigInt, float |
+| Fast doubling | Jump from F(k), F(k+1) to F(2k), F(2k+1): log₂ n steps × 3 multiplications. | BigInt, float |
+| `mpz_fib_ui` and `gmpy2.fib` | GMP's own Fibonacci function: doubling with 2 squarings per step. | BigInt |
+| Binet's formula | Round φⁿ/√5, where φ = (1 + √5)/2. Needs fractions, so floats only. | float |
+
+Ordinary JavaScript numbers (float64) aren't used: they keep only about 16 digits, are exact only up to F(78), and
+overflow past F(1,476).
 
 Every method runs in its own Web Worker, so the page never freezes. Runs expected to take over 2 minutes or about
 1.5 GB of memory are skipped unless you turn on dangerous mode.
@@ -144,11 +185,12 @@ Then open http://localhost:8000. There's no build step and nothing to install.
 ## License
 
 Released into the public domain under [the Unlicense](LICENSE). Copy, change, sell or use any of it however you
-like, with no need to credit anyone. The one exception is the bundled gmp-wasm library in
-[`js/vendor/`](js/vendor/), which keeps its own LGPL-3.0 license (see [`js/vendor/README.md`](js/vendor/README.md)).
+like, with no need to credit anyone. The exceptions are the bundled libraries in [`js/vendor/`](js/vendor/), which
+keep their own licenses: gmp-wasm (LGPL-3.0) and decimal.js (MIT); see [`js/vendor/README.md`](js/vendor/README.md).
 
 ## Credits
 
 - Fast doubling and matrix derivations: [Project Nayuki](https://www.nayuki.io/page/fast-fibonacci-algorithms)
 - [GMP](https://gmplib.org/) and [MPFR](https://www.mpfr.org/), compiled to WASM by [gmp-wasm](https://github.com/Daninet/gmp-wasm)
 - [Pyodide](https://pyodide.org/) and [gmpy2](https://github.com/gmpy2/gmpy2)
+- [decimal.js](https://github.com/MikeMcl/decimal.js) by Michael Mclaughlin
