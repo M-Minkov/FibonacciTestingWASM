@@ -1,6 +1,6 @@
 import { METHODS, Engine, estimate, learn, curves, computeAt } from './engine.js';
 import { BENCH } from './bench-data.js';
-import { CHECKED_DIGITS, FLOAT_DIGITS } from './algorithms.js';
+import { CHECKED_DIGITS, FLOAT_DIGITS } from './algorithms/index.js';
 import Decimal from './vendor/decimal-10.6.0.mjs';
 
 const TIME_LIMIT = 120e3;   // ms: runs expected to take longer are skipped (unless dangerous mode)

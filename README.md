@@ -13,7 +13,7 @@ It has two modes, and every method in a mode uses the same kind of number:
 
 The results show how WASM can be very beneficial, and much faster, in specific cases: GMP, a C library for huge
 numbers, compiled to WASM beats every other method here, including JavaScript's built-in `BigInt`. It isn't hard to
-set up either: calling GMP from JavaScript takes a few lines (see [`js/algorithms.js`](js/algorithms.js)), and you're
+set up either: calling GMP from JavaScript takes a few lines (see [`js/algorithms/gmp-wasm.js`](js/algorithms/gmp-wasm.js)), and you're
 free to take any code from this repo for your own experiments.
 
 **Live demo: https://m-minkov.github.io/FibonacciTestingWASM/**
@@ -166,7 +166,13 @@ Then open http://localhost:8000. There's no build step and nothing to install.
 
 ## How the code is organized
 
-- [`js/algorithms.js`](js/algorithms.js): the implementations. The page shows this exact code under each method's "About".
+- [`js/algorithms/`](js/algorithms/): the implementations, one file per language or library. The page shows this
+  exact code under each method's "About".
+  - [`javascript-bigint.js`](js/algorithms/javascript-bigint.js): pure JavaScript with the built-in `BigInt`.
+  - [`javascript-decimal.js`](js/algorithms/javascript-decimal.js): JavaScript with decimal.js floats.
+  - [`python.js`](js/algorithms/python.js): the Python code run by Pyodide (plain `int`, gmpy2, `decimal`, MPFR).
+  - [`gmp-wasm.js`](js/algorithms/gmp-wasm.js): GMP and MPFR compiled to WebAssembly, called from JavaScript.
+  - [`precision.js`](js/algorithms/precision.js): the float-mode precision shared by every float method.
 - [`js/worker.js`](js/worker.js): one worker per method; loads Pyodide or gmp-wasm only when needed.
 - [`js/engine.js`](js/engine.js): method details, the worker wrapper and the time and memory estimates.
 - [`js/app.js`](js/app.js): the page: running methods side by side, progress bars and the chart.

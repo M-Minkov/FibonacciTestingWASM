@@ -3,7 +3,7 @@
 import {
   fibIterative, fibMatrix, fibDoubling, fibIterativeFloat, fibMatrixFloat, fibDoublingFloat, fibBinetFloat,
   PY_DOUBLING, PY_GMPY2, PY_DECIMAL, PY_MPFR, gmpFib, mpfrDoubling, mpfrBinet,
-} from './algorithms.js';
+} from './algorithms/index.js';
 import { BENCH } from './bench-data.js';
 
 export const BYTES_PER_N = 0.6942419136306174 / 8; // F(n) has n·log2(φ) ≈ 0.694n bits

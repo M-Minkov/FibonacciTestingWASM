@@ -4,7 +4,7 @@
 import {
   fibIterative, fibMatrix, fibDoubling, fibIterativeFloat, fibMatrixFloat, fibDoublingFloat, fibBinetFloat,
   PY_DOUBLING, PY_GMPY2, PY_DECIMAL, PY_MPFR, gmpFib, mpfrDoubling, mpfrBinet, FLOAT_BITS, FLOAT_DIGITS,
-} from './algorithms.js';
+} from './algorithms/index.js';
 
 const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/';
 const GMP = './vendor/gmp-wasm-1.3.2.umd.min.js';
